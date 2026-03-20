@@ -50,6 +50,13 @@ def load_stations():
 
 #Model kann leider nicht gecashed werden, da sonst ein Error auftaucht
 def load_model():
+    # Compatibility patch: _passthrough_scorer was removed in sklearn 1.2
+    # but may be referenced in models pickled with sklearn 1.1.x
+    import sklearn.metrics._scorer
+    if not hasattr(sklearn.metrics._scorer, '_passthrough_scorer'):
+        def _passthrough_scorer(estimator, *args, **kwargs):
+            return estimator.score(*args, **kwargs)
+        sklearn.metrics._scorer._passthrough_scorer = _passthrough_scorer
     loaded_model = pickle.load(open('./Data/finalized_model.sav', 'rb'))
     #loaded_model = xgb.Booster()
     #loaded_model.load_model("./Data/model.json")
