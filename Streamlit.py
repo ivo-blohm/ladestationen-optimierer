@@ -9,13 +9,13 @@ Created on Mon Dec 19 13:50:45 2022
 
 import streamlit as st
 import pandas as pd
-import geopandas as gpd
 import plotly.express as px
 import pickle
 import numpy as np
 import sklearn
 import xgboost as xgb
 from shapely import wkt
+from shapely.geometry import mapping
 
 ####Funktionen Defenition####
 
@@ -29,7 +29,14 @@ def load_data():
 def load_borders():
     borders = pd.read_csv("./Data/GemeindeGrenzen_Vereinfacht.csv", index_col='GemeindeLabel')
     borders['geometry'] = borders['geometry'].apply(wkt.loads)
-    return gpd.GeoDataFrame(borders)
+    geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            {"type": "Feature", "id": label, "geometry": mapping(geom), "properties": {}}
+            for label, geom in borders['geometry'].items()
+        ]
+    }
+    return borders, geojson
 
 @st.cache_data
 def load_EV():
@@ -49,8 +56,8 @@ def load_model():
     return loaded_model
 
 #Findet das Zentrum einer Gemeinde, so dass die Karte richtig zentriert werden kann
-def find_center(GemName, gdf):
-    return gdf[gdf.index.isin(GemName)].geometry.values[0].centroid
+def find_center(GemName, borders_df):
+    return borders_df[borders_df.index.isin(GemName)]['geometry'].values[0].centroid
 
 #Funktion für den Wachstumsberechner; Berechnet und Predict anhand den Wachstumsraten die neuen Werte
 #Prints sind zum Debuggen hier
@@ -85,7 +92,7 @@ st.title('Ladestationen Schweiz Übersicht')
 
 #### Daten werden geladen ####
 df = load_data() #Hauptdatenset
-borders = load_borders() #Gemeindegrenzen
+borders, borders_geojson = load_borders() #Gemeindegrenzen
 EVdf = load_EV() #EV Bestände
 stations = load_stations() #Ladestation TimeSeries
 
@@ -150,7 +157,7 @@ with tab1: #Analyse nach Gemeinde
         
         ###Karte###
         fig1 = px.choropleth_mapbox(df,
-                               geojson=borders.geometry,
+                               geojson=borders_geojson,
                                locations=df.index,
                                color=select,
                                center={"lat": find_center(options1, borders).y, "lon": find_center(options1, borders).x},
@@ -174,7 +181,7 @@ with tab2: #Analyse Schweiz
 
 ###Karte###
     fig2 = px.choropleth_mapbox(df,
-                           geojson=borders.geometry,
+                           geojson=borders_geojson,
                            locations=df.index,
                            color=select2,
                            center={"lat": 46.9, "lon": 8.2275},
